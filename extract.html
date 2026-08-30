@@ -1,0 +1,202 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>Exporting Perplexity to Gemini</title>
+  <style>
+    :root {
+      --bg: #ffffff;
+      --fg: #111111;
+      --border: #eaeaea;
+      --accent: #000000;
+      --text-muted: #666666;
+      --badge-bg: #f8f9fa;
+    }
+    @media (prefers-color-scheme: dark) {
+      :root {
+        --bg: #111111;
+        --fg: #ffffff;
+        --border: #333333;
+        --accent: #ffffff;
+        --text-muted: #888888;
+        --badge-bg: #1c1c1e;
+      }
+    }
+    body {
+      background-color: var(--bg);
+      color: var(--fg);
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif, "Apple Color Emoji", "Segoe UI Emoji";
+      margin: 0;
+      padding: 0;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      min-height: 100vh;
+      line-height: 1.5;
+    }
+    .container {
+      width: 100%;
+      max-width: 600px;
+      padding: 40px;
+      box-sizing: border-box;
+    }
+    h1 {
+      font-size: 24px;
+      font-weight: 600;
+      margin: 0 0 8px 0;
+      letter-spacing: -0.02em;
+    }
+    p.subtitle {
+      color: var(--text-muted);
+      margin: 0 0 24px 0;
+      font-size: 14px;
+    }
+    .privacy-banner {
+      background-color: var(--badge-bg);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 16px;
+      margin-bottom: 24px;
+      font-size: 13px;
+    }
+    .privacy-banner header {
+      font-weight: 600;
+      margin-bottom: 6px;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .privacy-banner p {
+      margin: 0;
+      color: var(--text-muted);
+      line-height: 1.45;
+    }
+    .status-card {
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 24px;
+      margin-bottom: 24px;
+    }
+    .stat-row {
+      display: flex;
+      justify-content: space-between;
+      margin-bottom: 12px;
+      font-size: 14px;
+    }
+    .stat-label {
+      color: var(--text-muted);
+    }
+    .stat-value {
+      font-weight: 500;
+      font-variant-numeric: tabular-nums;
+    }
+    .progress-bar-container {
+      width: 100%;
+      height: 4px;
+      background: var(--border);
+      border-radius: 2px;
+      margin-top: 16px;
+      margin-bottom: 16px;
+      overflow: hidden;
+    }
+    .progress-bar {
+      height: 100%;
+      background: var(--accent);
+      width: 0%;
+      transition: width 0.2s ease;
+    }
+    .current-thread {
+      font-size: 13px;
+      color: var(--text-muted);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      background: var(--accent);
+      color: var(--bg);
+      border: none;
+      border-radius: 6px;
+      padding: 0 16px;
+      height: 40px;
+      font-size: 14px;
+      font-weight: 500;
+      cursor: pointer;
+      width: 100%;
+      transition: opacity 0.2s;
+    }
+    .btn:hover {
+      opacity: 0.9;
+    }
+    .btn:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+    }
+    .hidden {
+      display: none !important;
+    }
+    .log-container {
+      margin-top: 24px;
+      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+      font-size: 12px;
+      color: var(--text-muted);
+      max-height: 120px;
+      overflow-y: auto;
+      border-top: 1px solid var(--border);
+      padding-top: 16px;
+    }
+    .log-entry {
+      margin-bottom: 4px;
+    }
+    .success-text { color: #10b981; }
+    .error-text { color: #ef4444; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>Perplexity to Gemini</h1>
+    <p class="subtitle">Extracting your chat history securely.</p>
+    
+    <div class="privacy-banner">
+      <header>🔒 100% Local & Private Processing</header>
+      <p>Your conversation history is read directly from your browser session and formatted locally. No personal data, credentials, or chat contents are sent to external servers or third parties.</p>
+    </div>
+
+    <div class="status-card">
+      <div class="stat-row">
+        <span class="stat-label">Threads Detected</span>
+        <span class="stat-value" id="stat-detected">0</span>
+      </div>
+      <div class="stat-row">
+        <span class="stat-label">Threads Extracted</span>
+        <span class="stat-value" id="stat-extracted">0</span>
+      </div>
+      <div class="stat-row">
+        <span class="stat-label">Empty / Skipped</span>
+        <span class="stat-value" id="stat-skipped">0</span>
+      </div>
+      <div class="stat-row">
+        <span class="stat-label">Errors</span>
+        <span class="stat-value" id="stat-errors" style="color: #ef4444;">0</span>
+      </div>
+      
+      <div class="progress-bar-container">
+        <div class="progress-bar" id="progress-bar"></div>
+      </div>
+      
+      <div class="current-thread" id="current-thread">Initializing...</div>
+    </div>
+    
+    <button id="downloadBtn" class="btn hidden">Download ZIP</button>
+    <button id="cancelBtn" class="btn" style="background: var(--bg); color: var(--fg); border: 1px solid var(--border); margin-top: 12px;">Cancel</button>
+
+    <div class="log-container hidden" id="log-container"></div>
+  </div>
+
+  <script src="jszip.min.js"></script>
+  <script src="extract.js"></script>
+</body>
+</html>

@@ -1,0 +1,21 @@
+{
+  "manifest_version": 3,
+  "name": "Perplexity to Gemini Exporter",
+  "version": "1.0",
+  "description": "Extracts Perplexity chat history and projects to a Gemini-compatible ZIP",
+  "permissions": [
+    "activeTab",
+    "scripting",
+    "downloads"
+  ],
+  "host_permissions": [
+    "*://*.perplexity.ai/*"
+  ],
+  "action": {
+    "default_popup": "popup.html",
+    "default_icon": "icon.png"
+  },
+  "icons": {
+    "128": "icon.png"
+  }
+}
