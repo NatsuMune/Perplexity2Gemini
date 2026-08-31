@@ -43,6 +43,7 @@ function logMsg(data, type = 'default') {
     d.textContent = (data !== undefined && data !== null && data !== 'undefined') ? String(data) : '';
   }
 
+  console.log(`[P2G UI Log]`, data);
   c.appendChild(d);
   c.scrollTop = c.scrollHeight;
 }
