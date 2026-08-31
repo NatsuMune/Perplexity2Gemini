@@ -32,12 +32,15 @@ function logMsg(data, type = 'default') {
       d.appendChild(titleSpan);
     }
 
-    if (data.reason) {
-      d.appendChild(document.createTextNode(` — ${data.reason}`));
+    const reasonStr = (data.reason !== undefined && data.reason !== null && data.reason !== 'undefined') 
+      ? String(data.reason) 
+      : '';
+    if (reasonStr) {
+      d.appendChild(document.createTextNode(` — ${reasonStr}`));
     }
   } else {
     d.className += ' ' + (type === 'error' ? 'error-text' : type === 'success' ? 'success-text' : '');
-    d.textContent = String(data);
+    d.textContent = (data !== undefined && data !== null && data !== 'undefined') ? String(data) : '';
   }
 
   c.appendChild(d);
@@ -284,9 +287,17 @@ async function performInjectedExtraction() {
         let errCode = "";
         try {
           const errJson = await response.json();
-          if (errJson && errJson.detail) {
-            errMessage = errJson.detail.message || errMessage;
-            errCode = errJson.detail.error_code || "";
+          if (errJson) {
+            if (typeof errJson.detail === 'string') {
+              errMessage = errJson.detail;
+            } else if (errJson.detail && typeof errJson.detail === 'object') {
+              errMessage = errJson.detail.message || errJson.detail.error_code || `HTTP ${response.status}`;
+              errCode = errJson.detail.error_code || "";
+            } else if (typeof errJson.message === 'string') {
+              errMessage = errJson.message;
+            } else if (typeof errJson.error === 'string') {
+              errMessage = errJson.error;
+            }
           }
         } catch (e) {}
 
@@ -301,7 +312,7 @@ async function performInjectedExtraction() {
             logData: {
               tag: 'SKIPPED',
               title: cachedTitle || uuid,
-              reason: errMessage
+              reason: errMessage || "This entry has expired or is unavailable"
             }
           });
           continue;
