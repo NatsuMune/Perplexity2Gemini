@@ -136,70 +136,96 @@ async function performInjectedExtraction() {
 
   const sleep = ms => new Promise(r => setTimeout(r, ms));
 
-  let threadsList = [];
-  let projectsMap = [];
+  let rawRecent = [];
   try {
     const listRes = await fetch("https://www.perplexity.ai/rest/thread/list_recent?limit=500&offset=0");
     const listData = await listRes.json();
-    threadsList = Array.isArray(listData) ? listData : (listData.threads || []);
-    
-    // Also try to get collections (projects)
-    try {
-      const collectionsRes = await fetch("https://www.perplexity.ai/rest/collections/list_user_collections");
-      if (collectionsRes.ok) {
-        const collData = await collectionsRes.json();
-        const collectionsArray = Array.isArray(collData) ? collData : (collData.collections || []);
-        
-        for (const col of collectionsArray) {
-          if (!col.slug) continue;
-          
-          // 1. Get collection details (for instructions)
-          const detailRes = await fetch("https://www.perplexity.ai/rest/collections/get_collection?slug=" + col.slug);
-          const detail = await detailRes.json();
-          
-          // 2. Get collection threads
-          const threadsRes = await fetch("https://www.perplexity.ai/rest/collections/list_collection_threads?collection_slug=" + col.slug + "&limit=250&offset=0");
-          let colThreads = [];
-          if (threadsRes.ok) {
-            const tData = await threadsRes.json();
-            colThreads = Array.isArray(tData) ? tData : (tData.threads || []);
-          }
-          
-          if (colThreads.length > 0) {
-            threadsList = threadsList.concat(colThreads);
-            projectsMap.push({
-              title: col.title,
-              instructions: detail.instructions || "",
-              description: detail.description || "",
-              threadTitles: colThreads.map(t => t.title || t.thread_title || t.uuid)
-            });
-          }
-        }
-      }
-    } catch(e) {
-      // Collections fetch optional
-    }
+    rawRecent = Array.isArray(listData) ? listData : (listData.threads || []);
   } catch (e) {
     chrome.runtime.sendMessage({ type: 'P2G_ERROR', message: "Failed to fetch thread list: " + e.message });
     return;
+  }
+
+  let projectThreads = [];
+  let projectsMap = [];
+  try {
+    const collectionsRes = await fetch("https://www.perplexity.ai/rest/collections/list_user_collections");
+    if (collectionsRes.ok) {
+      const collData = await collectionsRes.json();
+      const collectionsArray = Array.isArray(collData) ? collData : (collData.collections || []);
+      
+      for (const col of collectionsArray) {
+        if (!col.slug) continue;
+        
+        // 1. Get collection details (for instructions)
+        const detailRes = await fetch("https://www.perplexity.ai/rest/collections/get_collection?slug=" + col.slug);
+        const detail = await detailRes.json();
+        
+        // 2. Get collection threads
+        const threadsRes = await fetch("https://www.perplexity.ai/rest/collections/list_collection_threads?collection_slug=" + col.slug + "&limit=250&offset=0");
+        let colThreads = [];
+        if (threadsRes.ok) {
+          const tData = await threadsRes.json();
+          colThreads = Array.isArray(tData) ? tData : (tData.threads || []);
+        }
+        
+        if (colThreads.length > 0) {
+          colThreads.forEach(t => {
+            projectThreads.push({ ...t, projectName: col.title });
+          });
+          projectsMap.push({
+            title: col.title,
+            instructions: detail.instructions || "",
+            description: detail.description || "",
+            threadTitles: colThreads.map(t => t.title || t.thread_title || t.uuid)
+          });
+        }
+      }
+    }
+  } catch(e) {
+    // Collections fetch optional
   }
   
   // Save projects map via message so extract.js running in extension can save it
   chrome.runtime.sendMessage({ type: 'P2G_PROJECT_DATA', projects: projectsMap });
 
-
-  // Deduplicate by UUID
-  const uniqueThreads = [];
-  const seen = new Set();
-  for (const t of threadsList) {
-    if (t.uuid && !seen.has(t.uuid)) {
-      seen.add(t.uuid);
-      uniqueThreads.push(t);
+  // Map threads and track project association
+  const threadMap = new Map();
+  
+  // Add project threads first so they get assigned their project name
+  for (const t of projectThreads) {
+    if (t.uuid) {
+      threadMap.set(t.uuid, t);
+    }
+  }
+  
+  // Add standalone recent threads
+  for (const t of rawRecent) {
+    if (t.uuid && !threadMap.has(t.uuid)) {
+      threadMap.set(t.uuid, { ...t, projectName: null });
     }
   }
 
+  const uniqueThreads = Array.from(threadMap.values());
   const total = uniqueThreads.length;
-  chrome.runtime.sendMessage({ type: 'P2G_DETECTED', total });
+  
+  let standaloneCount = 0;
+  let projectThreadsCount = 0;
+  for (const t of uniqueThreads) {
+    if (t.projectName) {
+      projectThreadsCount++;
+    } else {
+      standaloneCount++;
+    }
+  }
+
+  chrome.runtime.sendMessage({ 
+    type: 'P2G_DETECTED', 
+    total,
+    standaloneCount,
+    projectThreadsCount,
+    projectsCount: projectsMap.length
+  });
   
   if (total === 0) {
     chrome.runtime.sendMessage({ type: 'P2G_COMPLETE', conversations: [] });
@@ -221,6 +247,7 @@ async function performInjectedExtraction() {
       index: i + 1, 
       total, 
       currentTitle: cachedTitle || uuid,
+      projectName: thread.projectName || "Standalone",
       extractedCount,
       skippedCount,
       errorCount
@@ -383,12 +410,16 @@ async function initUI() {
       });
     } else if (msg.type === 'P2G_DETECTED') {
       document.getElementById('stat-detected').textContent = msg.total;
+      document.getElementById('stat-standalone').textContent = msg.standaloneCount || 0;
+      document.getElementById('stat-project-threads').textContent = msg.projectThreadsCount || 0;
+      document.getElementById('stat-projects').textContent = msg.projectsCount || 0;
       if (msg.total === 0) {
         document.getElementById('current-thread').textContent = "No threads found on your account.";
       }
     } else if (msg.type === 'P2G_PROGRESS') {
       const pct = Math.round((msg.index / msg.total) * 100);
       document.getElementById('progress-bar').style.width = `${pct}%`;
+      document.getElementById('current-project').textContent = msg.projectName || "Standalone";
       document.getElementById('current-thread').textContent = `[${msg.index}/${msg.total}] Extracting: ${msg.currentTitle}...`;
       document.getElementById('stat-extracted').textContent = msg.extractedCount;
       document.getElementById('stat-skipped').textContent = msg.skippedCount;

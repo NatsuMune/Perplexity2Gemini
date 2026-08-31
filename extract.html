@@ -192,15 +192,19 @@
 
     <div class="status-card">
       <div class="stat-row">
-        <span class="stat-label">Threads Detected</span>
-        <span class="stat-value" id="stat-detected">0</span>
+        <span class="stat-label">Standalone Threads</span>
+        <span class="stat-value" id="stat-standalone">0</span>
+      </div>
+      <div class="stat-row">
+        <span class="stat-label">Project Threads</span>
+        <span class="stat-value"><span id="stat-project-threads">0</span> <span style="font-size: 12px; font-weight: normal; color: var(--text-muted);">across <span id="stat-projects">0</span> projects</span></span>
       </div>
       <div class="stat-row">
         <span class="stat-label">Threads Extracted</span>
-        <span class="stat-value" id="stat-extracted">0</span>
+        <span class="stat-value"><span id="stat-extracted">0</span> / <span id="stat-detected">0</span></span>
       </div>
       <div class="stat-row">
-        <span class="stat-label">Empty / Skipped</span>
+        <span class="stat-label">Skipped / Empty</span>
         <span class="stat-value" id="stat-skipped">0</span>
       </div>
       <div class="stat-row">
@@ -212,6 +216,10 @@
         <div class="progress-bar" id="progress-bar"></div>
       </div>
       
+      <div style="font-size: 12px; margin-bottom: 6px; color: var(--text-muted); display: flex; align-items: center; gap: 6px;">
+        <span>Location:</span>
+        <span id="current-project" style="font-weight: 600; color: var(--fg); background: var(--badge-bg); padding: 2px 8px; border-radius: 4px; border: 1px solid var(--border);">Standalone</span>
+      </div>
       <div class="current-thread" id="current-thread">Initializing...</div>
     </div>
     
