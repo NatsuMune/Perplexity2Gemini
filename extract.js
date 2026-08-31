@@ -256,12 +256,37 @@ async function performInjectedExtraction() {
     try {
       const response = await fetch("https://www.perplexity.ai/rest/thread/" + uuid);
       if (!response.ok) {
-        throw new Error(`HTTP ${response.status}`);
+        let errMessage = `HTTP ${response.status}`;
+        let errCode = "";
+        try {
+          const errJson = await response.json();
+          if (errJson && errJson.detail) {
+            errMessage = errJson.detail.message || errMessage;
+            errCode = errJson.detail.error_code || "";
+          }
+        } catch (e) {}
+
+        const logText = `Thread "${cachedTitle || uuid}" (${uuid}): ${errMessage}${errCode ? ` (${errCode})` : ''}`;
+        console.warn(`[P2G Warning] ${logText}`);
+
+        // If thread is expired or deleted, handle gracefully as skipped
+        if (response.status === 400 || response.status === 404 || errCode === 'ENTRY_EXPIRED') {
+          skippedCount++;
+          chrome.runtime.sendMessage({ 
+            type: 'P2G_LOG', 
+            message: `Skipped (Expired/Deleted): ${cachedTitle || uuid} - ${errMessage}`, 
+            isError: false 
+          });
+          continue;
+        }
+
+        throw new Error(logText);
       }
       const data = await response.json();
       const threadData = data.entries ? data : (data.thread || data);
 
       if (!threadData.entries || threadData.entries.length === 0) {
+        console.log(`[P2G] Thread "${cachedTitle || uuid}" has zero entries, skipping.`);
         skippedCount++;
         continue;
       }
@@ -281,34 +306,43 @@ async function performInjectedExtraction() {
 
       for (let j = 0; j < threadData.entries.length; j++) {
         const entry = threadData.entries[j];
-        const userText = entry.query_str || "";
-        if (userText) hasValidContent = true;
         
-        const userNodeId = innerGenerateUUID();
-        mapping[parentNodeId].children.push(userNodeId);
-        mapping[userNodeId] = {
-          id: userNodeId,
-          message: {
-            id: userNodeId,
-            author: { role: "user", name: null, metadata: {} },
-            create_time: createTime + j * 2,
-            update_time: null,
-            content: { content_type: "text", parts: [userText] },
-            status: "finished_successfully",
-            end_turn: null,
-            weight: 1.0,
-            metadata: {},
-            recipient: "all"
-          },
-          parent: parentNodeId,
-          children: []
-        };
-        parentNodeId = userNodeId;
-        lastNodeId = userNodeId;
+        let queryStr = entry.query_str || "";
+        if (!queryStr && entry.query && entry.query.text) {
+          queryStr = entry.query.text;
+        }
+        
+        let answerStr = innerExtractAnswer(entry.text);
 
-        const answerText = innerExtractAnswer(entry.text);
-        if (answerText) {
+        if (queryStr || answerStr) {
           hasValidContent = true;
+        }
+
+        if (queryStr) {
+          const userNodeId = innerGenerateUUID();
+          mapping[parentNodeId].children.push(userNodeId);
+          mapping[userNodeId] = {
+            id: userNodeId,
+            message: {
+              id: userNodeId,
+              author: { role: "user", name: null, metadata: {} },
+              create_time: createTime + j * 2,
+              update_time: null,
+              content: { content_type: "text", parts: [queryStr] },
+              status: "finished_successfully",
+              end_turn: true,
+              weight: 1.0,
+              metadata: { is_visually_hidden_from_conversation: false },
+              recipient: "all"
+            },
+            parent: parentNodeId,
+            children: []
+          };
+          parentNodeId = userNodeId;
+          lastNodeId = userNodeId;
+        }
+
+        if (answerStr) {
           const assistantNodeId = innerGenerateUUID();
           mapping[parentNodeId].children.push(assistantNodeId);
           mapping[assistantNodeId] = {
@@ -318,11 +352,11 @@ async function performInjectedExtraction() {
               author: { role: "assistant", name: null, metadata: {} },
               create_time: createTime + j * 2 + 1,
               update_time: null,
-              content: { content_type: "text", parts: [answerText] },
+              content: { content_type: "text", parts: [answerStr] },
               status: "finished_successfully",
               end_turn: true,
               weight: 1.0,
-              metadata: { finish_details: { type: "stop" }, is_complete: true, model_slug: "gpt-4o" },
+              metadata: { is_visually_hidden_from_conversation: false },
               recipient: "all"
             },
             parent: parentNodeId,
@@ -353,7 +387,8 @@ async function performInjectedExtraction() {
       
     } catch (err) {
       errorCount++;
-      chrome.runtime.sendMessage({ type: 'P2G_LOG', message: `Error on ${uuid}: ${err.message}`, isError: true });
+      console.error(`[P2G Error] Exception processing thread ${uuid} ("${cachedTitle || 'Untitled'}"):`, err);
+      chrome.runtime.sendMessage({ type: 'P2G_LOG', message: `Error on ${cachedTitle || uuid}: ${err.message}`, isError: true });
     }
     
     await sleep(20);
