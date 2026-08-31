@@ -526,7 +526,7 @@ async function initUI() {
       document.getElementById('stat-skipped').textContent = msg.skippedCount;
       document.getElementById('stat-errors').textContent = msg.errorCount;
     } else if (msg.type === 'P2G_LOG') {
-      logMsg(msg.message, msg.isError ? "error" : "default");
+      logMsg(msg.logData || msg.message, msg.isError ? "error" : "default");
     } else if (msg.type === 'P2G_ERROR') {
       document.getElementById('current-thread').textContent = "Extraction failed: " + msg.message;
       logMsg(msg.message, "error");
