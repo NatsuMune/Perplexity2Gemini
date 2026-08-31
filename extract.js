@@ -10,12 +10,36 @@ function generateUUID() {
   });
 }
 
-function logMsg(msg, type = 'default') {
+function logMsg(data, type = 'default') {
   const c = document.getElementById('log-container');
+  if (!c) return;
   c.classList.remove('hidden');
   const d = document.createElement('div');
-  d.className = 'log-entry ' + (type === 'error' ? 'error-text' : type === 'success' ? 'success-text' : '');
-  d.textContent = msg;
+  d.className = 'log-entry';
+
+  if (typeof data === 'object' && data !== null) {
+    const badgeClass = data.tag ? data.tag.toLowerCase() : type;
+    const badge = document.createElement('span');
+    badge.className = `log-badge ${badgeClass}`;
+    badge.textContent = data.tag || 'INFO';
+    d.appendChild(badge);
+
+    if (data.title) {
+      d.appendChild(document.createTextNode(' '));
+      const titleSpan = document.createElement('span');
+      titleSpan.className = 'log-title';
+      titleSpan.textContent = `"${data.title}"`;
+      d.appendChild(titleSpan);
+    }
+
+    if (data.reason) {
+      d.appendChild(document.createTextNode(` — ${data.reason}`));
+    }
+  } else {
+    d.className += ' ' + (type === 'error' ? 'error-text' : type === 'success' ? 'success-text' : '');
+    d.textContent = String(data);
+  }
+
   c.appendChild(d);
   c.scrollTop = c.scrollHeight;
 }
@@ -274,8 +298,11 @@ async function performInjectedExtraction() {
           skippedCount++;
           chrome.runtime.sendMessage({ 
             type: 'P2G_LOG', 
-            message: `Skipped (Expired/Deleted): ${cachedTitle || uuid} - ${errMessage}`, 
-            isError: false 
+            logData: {
+              tag: 'SKIPPED',
+              title: cachedTitle || uuid,
+              reason: errMessage
+            }
           });
           continue;
         }
@@ -388,7 +415,14 @@ async function performInjectedExtraction() {
     } catch (err) {
       errorCount++;
       console.error(`[P2G Error] Exception processing thread ${uuid} ("${cachedTitle || 'Untitled'}"):`, err);
-      chrome.runtime.sendMessage({ type: 'P2G_LOG', message: `Error on ${cachedTitle || uuid}: ${err.message}`, isError: true });
+      chrome.runtime.sendMessage({ 
+        type: 'P2G_LOG', 
+        logData: {
+          tag: 'ERROR',
+          title: cachedTitle || uuid,
+          reason: err.message
+        }
+      });
     }
     
     await sleep(20);
