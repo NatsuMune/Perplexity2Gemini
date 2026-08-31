@@ -326,6 +326,14 @@ async function performInjectedExtraction() {
       if (!threadData.entries || threadData.entries.length === 0) {
         console.log(`[P2G] Thread "${cachedTitle || uuid}" has zero entries, skipping.`);
         skippedCount++;
+        chrome.runtime.sendMessage({ 
+          type: 'P2G_LOG', 
+          logData: {
+            tag: 'SKIPPED',
+            title: cachedTitle || uuid,
+            reason: "Thread has zero message entries (empty thread)"
+          }
+        });
         continue;
       }
 
@@ -421,6 +429,14 @@ async function performInjectedExtraction() {
         extractedCount++;
       } else {
         skippedCount++;
+        chrome.runtime.sendMessage({ 
+          type: 'P2G_LOG', 
+          logData: {
+            tag: 'SKIPPED',
+            title: threadTitle || cachedTitle || uuid,
+            reason: "No valid query or answer text found in thread"
+          }
+        });
       }
       
     } catch (err) {
