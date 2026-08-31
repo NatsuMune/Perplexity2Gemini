@@ -11,6 +11,8 @@
       --accent: #000000;
       --text-muted: #666666;
       --badge-bg: #f8f9fa;
+      --success-bg: #ecfdf5;
+      --success-border: #a7f3d0;
     }
     @media (prefers-color-scheme: dark) {
       :root {
@@ -20,6 +22,8 @@
         --accent: #ffffff;
         --text-muted: #888888;
         --badge-bg: #1c1c1e;
+        --success-bg: #064e3b;
+        --success-border: #059669;
       }
     }
     body {
@@ -153,6 +157,27 @@
     }
     .success-text { color: #10b981; }
     .error-text { color: #ef4444; }
+
+    #next-steps-guide {
+      margin-top: 24px;
+      padding: 20px;
+      background: var(--success-bg);
+      border: 1px solid var(--success-border);
+      border-radius: 8px;
+    }
+    #next-steps-guide h3 {
+      margin: 0 0 12px 0;
+      font-size: 16px;
+    }
+    #next-steps-guide ol {
+      margin: 0;
+      padding-left: 20px;
+      font-size: 14px;
+      line-height: 1.6;
+    }
+    #next-steps-guide li {
+      margin-bottom: 8px;
+    }
   </style>
 </head>
 <body>
@@ -192,6 +217,17 @@
     
     <button id="downloadBtn" class="btn hidden">Download ZIP</button>
     <button id="cancelBtn" class="btn" style="background: var(--bg); color: var(--fg); border: 1px solid var(--border); margin-top: 12px;">Cancel</button>
+
+    <div id="next-steps-guide" class="hidden">
+      <h3>🎉 Extraction Complete! Next Steps:</h3>
+      <ol>
+        <li>Click <strong>Download ZIP</strong> above.</li>
+        <li>Open <a href="https://gemini.google.com" target="_blank" style="color: inherit; font-weight: 600;">gemini.google.com</a> and import the ZIP file in your settings.</li>
+        <li>Wait for Gemini to finish processing your imported conversations.</li>
+        <li>Click on this extension's icon again and click <strong>Start Migration</strong> to automatically create your Gems/Notebooks!</li>
+        <li><strong>Memory Prompt Trick:</strong> To transfer your overall account memory, you can start a new Gemini chat and prompt: <em>"Here are some facts about me from my previous AI assistant: [paste facts]. Please remember this for all future conversations."</em></li>
+      </ol>
+    </div>
 
     <div class="log-container hidden" id="log-container"></div>
   </div>

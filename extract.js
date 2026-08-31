@@ -137,6 +137,7 @@ async function performInjectedExtraction() {
   const sleep = ms => new Promise(r => setTimeout(r, ms));
 
   let threadsList = [];
+  let projectsMap = [];
   try {
     const listRes = await fetch("https://www.perplexity.ai/rest/thread/list_recent?limit=500&offset=0");
     const listData = await listRes.json();
@@ -148,9 +149,21 @@ async function performInjectedExtraction() {
       if (collectionsRes.ok) {
         const collData = await collectionsRes.json();
         const collectionsArray = Array.isArray(collData) ? collData : (collData.collections || []);
+        
         for (const col of collectionsArray) {
-          if (col.threads && Array.isArray(col.threads)) {
-            threadsList = threadsList.concat(col.threads);
+          if (!col.slug) continue;
+          const detailRes = await fetch("https://www.perplexity.ai/rest/collections/get_collection?slug=" + col.slug);
+          const detail = await detailRes.json();
+          const colThreads = Array.isArray(detail.threads) ? detail.threads : [];
+          
+          if (colThreads.length > 0) {
+            threadsList = threadsList.concat(colThreads);
+            projectsMap.push({
+              title: col.title,
+              instructions: detail.instructions || "",
+              description: detail.description || "",
+              threadTitles: colThreads.map(t => t.title || t.thread_title || t.uuid)
+            });
           }
         }
       }
@@ -161,6 +174,10 @@ async function performInjectedExtraction() {
     chrome.runtime.sendMessage({ type: 'P2G_ERROR', message: "Failed to fetch thread list: " + e.message });
     return;
   }
+  
+  // Save projects map via message so extract.js running in extension can save it
+  chrome.runtime.sendMessage({ type: 'P2G_PROJECT_DATA', projects: projectsMap });
+
 
   // Deduplicate by UUID
   const uniqueThreads = [];
@@ -351,7 +368,11 @@ async function initUI() {
   chrome.runtime.onMessage.addListener(async (msg) => {
     if (isCancelled) return;
 
-    if (msg.type === 'P2G_DETECTED') {
+    if (msg.type === 'P2G_PROJECT_DATA') {
+      chrome.storage.local.set({ p2gProjects: msg.projects }, () => {
+        logMsg(`Saved ${msg.projects.length} projects to local storage for Gemini migration.`, "success");
+      });
+    } else if (msg.type === 'P2G_DETECTED') {
       document.getElementById('stat-detected').textContent = msg.total;
       if (msg.total === 0) {
         document.getElementById('current-thread').textContent = "No threads found on your account.";
@@ -395,6 +416,7 @@ async function initUI() {
 
         const downloadBtn = document.getElementById('downloadBtn');
         downloadBtn.classList.remove('hidden');
+        document.getElementById('next-steps-guide').classList.remove('hidden');
 
         const url = URL.createObjectURL(content);
         downloadBtn.onclick = () => {

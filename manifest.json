@@ -6,10 +6,12 @@
   "permissions": [
     "activeTab",
     "scripting",
-    "downloads"
+    "downloads",
+    "storage"
   ],
   "host_permissions": [
-    "*://*.perplexity.ai/*"
+    "*://*.perplexity.ai/*",
+    "*://gemini.google.com/*"
   ],
   "action": {
     "default_popup": "popup.html",
