@@ -169,7 +169,9 @@ async function performInjectedExtraction() {
   try {
     const listRes = await fetch("https://www.perplexity.ai/rest/thread/list_recent?limit=500&offset=0");
     const listData = await listRes.json();
-    rawRecent = Array.isArray(listData) ? listData : (listData.threads || []);
+    const allRecent = Array.isArray(listData) ? listData : (listData.threads || []);
+    // [TEMP TEST LIMIT] Limit to 3 standalone threads
+    rawRecent = allRecent.slice(0, 3);
   } catch (e) {
     chrome.runtime.sendMessage({ type: 'P2G_ERROR', message: "Failed to fetch thread list: " + e.message });
     return;
@@ -181,7 +183,7 @@ async function performInjectedExtraction() {
     const collectionsRes = await fetch("https://www.perplexity.ai/rest/collections/list_user_collections");
     if (collectionsRes.ok) {
       const collData = await collectionsRes.json();
-      const collectionsArray = Array.isArray(collData) ? collData : (collData.collections || []);
+      const collectionsArray = (Array.isArray(collData) ? collData : (collData.collections || [])).slice(0, 1); // [TEMP TEST LIMIT] 1 project
       
       for (const col of collectionsArray) {
         if (!col.slug) continue;
@@ -195,7 +197,8 @@ async function performInjectedExtraction() {
         let colThreads = [];
         if (threadsRes.ok) {
           const tData = await threadsRes.json();
-          colThreads = Array.isArray(tData) ? tData : (tData.threads || []);
+          const fetchedThreads = Array.isArray(tData) ? tData : (tData.threads || []);
+          colThreads = fetchedThreads.slice(0, 3); // [TEMP TEST LIMIT] 3 threads per project
         }
         
         if (colThreads.length > 0) {
