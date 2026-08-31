@@ -152,9 +152,18 @@ async function performInjectedExtraction() {
         
         for (const col of collectionsArray) {
           if (!col.slug) continue;
+          
+          // 1. Get collection details (for instructions)
           const detailRes = await fetch("https://www.perplexity.ai/rest/collections/get_collection?slug=" + col.slug);
           const detail = await detailRes.json();
-          const colThreads = Array.isArray(detail.threads) ? detail.threads : [];
+          
+          // 2. Get collection threads
+          const threadsRes = await fetch("https://www.perplexity.ai/rest/collections/list_collection_threads?collection_slug=" + col.slug + "&limit=250&offset=0");
+          let colThreads = [];
+          if (threadsRes.ok) {
+            const tData = await threadsRes.json();
+            colThreads = Array.isArray(tData) ? tData : (tData.threads || []);
+          }
           
           if (colThreads.length > 0) {
             threadsList = threadsList.concat(colThreads);
