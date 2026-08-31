@@ -25,10 +25,11 @@ function logMsg(data, type = 'default') {
     d.appendChild(badge);
 
     if (data.title) {
-      d.appendChild(document.createTextNode(' '));
       const titleSpan = document.createElement('span');
       titleSpan.className = 'log-title';
-      titleSpan.textContent = `"${data.title}"`;
+      const rawTitle = String(data.title);
+      titleSpan.title = rawTitle; // full title on hover
+      titleSpan.textContent = `"${rawTitle.length > 45 ? rawTitle.substring(0, 42) + '...' : rawTitle}"`;
       d.appendChild(titleSpan);
     }
 

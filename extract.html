@@ -155,6 +155,12 @@
     .log-entry {
       margin-bottom: 6px;
       line-height: 1.5;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      display: flex;
+      align-items: center;
+      gap: 6px;
     }
     .log-title {
       font-weight: 600;
@@ -163,6 +169,11 @@
       border: 1px solid var(--border);
       padding: 1px 6px;
       border-radius: 4px;
+      max-width: 260px;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      display: inline-block;
     }
     .log-badge {
       display: inline-block;
