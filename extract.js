@@ -515,7 +515,11 @@ async function initUI() {
     } else if (msg.type === 'P2G_PROGRESS') {
       const pct = Math.round((msg.index / msg.total) * 100);
       document.getElementById('progress-bar').style.width = `${pct}%`;
-      document.getElementById('current-project').textContent = msg.projectName || "Standalone";
+      const projName = msg.projectName || "Standalone";
+      const isProject = projName !== "Standalone";
+      const locLabel = document.getElementById('location-label');
+      if (locLabel) locLabel.textContent = isProject ? "Project:" : "Location:";
+      document.getElementById('current-project').textContent = projName;
       document.getElementById('current-thread').textContent = `[${msg.index}/${msg.total}] Extracting: ${msg.currentTitle}...`;
       document.getElementById('stat-extracted').textContent = msg.extractedCount;
       document.getElementById('stat-skipped').textContent = msg.skippedCount;
