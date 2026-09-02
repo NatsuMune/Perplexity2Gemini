@@ -218,9 +218,6 @@ async function performInjectedExtraction() {
     // Collections fetch optional
   }
   
-  // Save projects map via message so extract.js running in extension can save it
-  chrome.runtime.sendMessage({ type: 'P2G_PROJECT_DATA', projects: projectsMap });
-
   // Map threads and track project association
   const threadMap = new Map();
   
