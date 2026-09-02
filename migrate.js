@@ -67,13 +67,14 @@ async function performMigration(projects) {
   };
 
   const getThreadButton = (title) => {
-    // Finds the button whose aria-label starts with "More options for <title>"
-    // Handles truncation by checking startsWith or includes
     const btns = Array.from(document.querySelectorAll('button[aria-label^="More options for"]'));
     return btns.find(b => {
-      const label = b.getAttribute('aria-label');
-      // Sometimes titles have trailing spaces or ellipsis. Using includes is safer.
-      return label.includes(title.substring(0, 20)); // match first 20 chars
+      const label = (b.getAttribute('aria-label') || '').replace("More options for ", "").trim();
+      const cleanTitle = (title || '').trim();
+      if (!cleanTitle || !label) return false;
+      const subLen = Math.min(15, cleanTitle.length);
+      const sub = cleanTitle.substring(0, subLen);
+      return label.includes(sub) || cleanTitle.includes(label.substring(0, subLen));
     });
   };
 
@@ -96,14 +97,30 @@ async function performMigration(projects) {
     log("Opened notebook creator...");
     await sleep(3000); // wait for notebook to load
 
-    // 3. Fill Title
-    const titleInput = document.querySelector('input[aria-label="Name of the notebook"]');
+    // 3. Fill Title & Submit
+    const titleInput = document.querySelector('input[aria-label="Name of the notebook"]') || document.querySelector('#project-name-input');
     if (titleInput) {
       titleInput.value = proj.title;
       titleInput.dispatchEvent(new Event('input', { bubbles: true }));
-      // Press enter
-      titleInput.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
-      log("Set notebook title.");
+      titleInput.dispatchEvent(new Event('change', { bubbles: true }));
+      await sleep(500);
+
+      // Click the visible Create Notebook button
+      const btns = Array.from(document.querySelectorAll('button'));
+      const createBtn = btns.find(b => {
+        const isCreate = b.getAttribute('aria-label') === 'Create notebook' || b.innerText.trim() === 'Create notebook';
+        const isVis = b.offsetWidth > 0 && b.offsetHeight > 0 && window.getComputedStyle(b).display !== 'none';
+        return isCreate && isVis;
+      });
+
+      if (createBtn) {
+        createBtn.click();
+        log(`Created notebook: ${proj.title}`);
+      } else {
+        const form = titleInput.closest('form');
+        if (form && form.requestSubmit) form.requestSubmit();
+        log(`Submitted notebook form for: ${proj.title}`);
+      }
     } else {
       log("Could not find notebook title input.", "error");
     }
@@ -149,9 +166,6 @@ async function performMigration(projects) {
     if (proj.threadTitles && proj.threadTitles.length > 0) {
       log(`Adding ${proj.threadTitles.length} threads to ${proj.title}...`);
       
-      // Ensure "Recents" sidebar is open. 
-      // If we are in notebook view, we might need to open the sidebar.
-      // We will try finding the threads directly.
       let added = 0;
       for (const tTitle of proj.threadTitles) {
         const tBtn = getThreadButton(tTitle);
@@ -164,28 +178,33 @@ async function performMigration(projects) {
             addOpt.click();
             await sleep(1000);
             
-            const nbOpt = Array.from(document.querySelectorAll('mat-list-option')).find(o => o.innerText.includes(proj.title));
+            const listOptions = Array.from(document.querySelectorAll('mat-list-option, .mat-mdc-list-item, div[role="option"]'));
+            const nbOpt = listOptions.find(o => {
+              const text = (o.innerText || o.textContent || '').trim();
+              return text.toLowerCase().includes(proj.title.toLowerCase());
+            });
+
             if (nbOpt) {
               nbOpt.click();
               added++;
-              log(`Added thread to notebook: ${tTitle}`);
+              log(`Added thread to notebook: ${tTitle.substring(0, 40)}...`, "success");
             } else {
-              log(`Could not find notebook name in dialog for: ${tTitle}`);
+              log(`Could not find notebook "${proj.title}" in dialog for: ${tTitle.substring(0, 30)}...`);
               // close dialog
-              const closeBtn = Array.from(document.querySelectorAll('mat-dialog-container button')).find(b => b.innerText.includes('Close'));
+              const closeBtn = Array.from(document.querySelectorAll('mat-dialog-container button')).find(b => (b.innerText || b.getAttribute('aria-label') || '').includes('Close'));
               if (closeBtn) closeBtn.click();
             }
             await sleep(1000);
           } else {
              // Close menu by clicking body
              document.body.click();
-             log(`'Add to notebook' option missing for: ${tTitle}`);
+             log(`'Add to notebook' option missing for: ${tTitle.substring(0, 30)}...`);
           }
         } else {
-          log(`Thread not found in recents (might not be imported yet): ${tTitle}`);
+          log(`Skipped non-imported or expired thread: ${tTitle.substring(0, 40)}...`);
         }
       }
-      log(`Successfully added ${added}/${proj.threadTitles.length} threads.`, "success");
+      log(`Successfully added ${added}/${proj.threadTitles.length} threads to "${proj.title}".`, "success");
     }
 
     await sleep(2000);
