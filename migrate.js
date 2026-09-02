@@ -183,6 +183,12 @@ async function performMigration(projects) {
     if (proj.threadTitles && proj.threadTitles.length > 0) {
       log(`Adding ${proj.threadTitles.length} threads to ${proj.title}...`);
       
+      // Ensure we return to Library so the Recents sidebar is fully visible
+      if (!clickEl('a[aria-label="Library"]')) {
+        log("Navigating to Library to open Recents sidebar...");
+      }
+      await sleep(2500);
+
       let added = 0;
       for (const tTitle of proj.threadTitles) {
         const tBtn = getThreadButton(tTitle);
