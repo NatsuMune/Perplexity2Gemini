@@ -84,10 +84,16 @@ async function performMigration(projects) {
   };
 
   const getThreadButton = (title) => {
+    // If sidebar is collapsed, open it
+    const openSidebarBtn = document.querySelector('button[aria-label="Open sidebar"]');
+    if (openSidebarBtn && openSidebarBtn.offsetWidth > 0 && window.getComputedStyle(openSidebarBtn).display !== 'none') {
+      openSidebarBtn.click();
+    }
+
     const btns = Array.from(document.querySelectorAll('button[aria-label^="More options for"]'));
     return btns.find(b => {
-      const label = (b.getAttribute('aria-label') || '').replace("More options for ", "").trim();
-      const cleanTitle = (title || '').trim();
+      const label = (b.getAttribute('aria-label') || '').replace("More options for ", "").trim().toLowerCase();
+      const cleanTitle = (title || '').trim().toLowerCase();
       if (!cleanTitle || !label) return false;
       const subLen = Math.min(15, cleanTitle.length);
       const sub = cleanTitle.substring(0, subLen);
@@ -181,47 +187,51 @@ async function performMigration(projects) {
 
     // 5. Add Threads
     if (proj.threadTitles && proj.threadTitles.length > 0) {
-      log(`Adding ${proj.threadTitles.length} threads to ${proj.title}...`);
+      log(`Adding ${proj.threadTitles.length} threads to "${proj.title}"...`);
       
-      // Ensure we return to Library so the Recents sidebar is fully visible
-      if (!clickEl('a[aria-label="Library"]')) {
-        log("Navigating to Library to open Recents sidebar...");
+      // Expand sidebar or click Library
+      const openSidebarBtn = document.querySelector('button[aria-label="Open sidebar"]');
+      if (openSidebarBtn && openSidebarBtn.offsetWidth > 0) {
+        openSidebarBtn.click();
+        await sleep(800);
       }
-      await sleep(2500);
 
       let added = 0;
       for (const tTitle of proj.threadTitles) {
         const tBtn = getThreadButton(tTitle);
         if (tBtn) {
+          tBtn.scrollIntoView({ behavior: 'smooth', block: 'center' });
+          await sleep(300);
           tBtn.click();
-          await sleep(500);
+          await sleep(800);
           
-          const addOpt = Array.from(document.querySelectorAll('.mat-mdc-menu-item')).find(el => el.innerText.includes('Add to notebook'));
+          const menuItems = Array.from(document.querySelectorAll('.mat-mdc-menu-item, button'));
+          const addOpt = menuItems.find(el => (el.innerText || '').includes('Add to notebook'));
           if (addOpt) {
             addOpt.click();
-            await sleep(1000);
+            await sleep(1500); // wait for dialog to populate
             
             const listOptions = Array.from(document.querySelectorAll('mat-list-option, .mat-mdc-list-item, div[role="option"]'));
             const nbOpt = listOptions.find(o => {
-              const text = (o.innerText || o.textContent || '').trim();
-              return text.toLowerCase().includes(proj.title.toLowerCase());
+              const text = (o.innerText || o.textContent || '').trim().toLowerCase();
+              return text.includes(proj.title.toLowerCase());
             });
 
             if (nbOpt) {
               nbOpt.click();
               added++;
-              log(`Added thread to notebook: ${tTitle.substring(0, 40)}...`, "success");
+              log(`Added thread to "${proj.title}": ${tTitle.substring(0, 35)}...`, "success");
+              await sleep(2000); // allow Angular to finish move & auto-close dialog
             } else {
               log(`Could not find notebook "${proj.title}" in dialog for: ${tTitle.substring(0, 30)}...`);
+              await dismissDialog();
             }
-            await dismissDialog();
           } else {
-             // Close menu by clicking body
              document.body.click();
              log(`'Add to notebook' option missing for: ${tTitle.substring(0, 30)}...`);
           }
         } else {
-          log(`Skipped non-imported or expired thread: ${tTitle.substring(0, 40)}...`);
+          log(`Skipped (not found in Recents): ${tTitle.substring(0, 35)}...`);
         }
       }
       log(`Successfully added ${added}/${proj.threadTitles.length} threads to "${proj.title}".`, "success");
