@@ -66,6 +66,20 @@ async function performMigration(projects) {
     return false;
   };
 
+  const selectNotebookOption = (nbOpt) => {
+    if (!nbOpt) return;
+    nbOpt.focus();
+    nbOpt.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', code: 'Enter', keyCode: 13, bubbles: true }));
+    nbOpt.dispatchEvent(new KeyboardEvent('keyup', { key: 'Enter', code: 'Enter', keyCode: 13, bubbles: true }));
+
+    const inner = nbOpt.querySelector('.option-content') || nbOpt.querySelector('.mdc-list-item__content') || nbOpt;
+    inner.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true }));
+    inner.dispatchEvent(new MouseEvent('mousedown', { bubbles: true }));
+    inner.dispatchEvent(new PointerEvent('pointerup', { bubbles: true }));
+    inner.dispatchEvent(new MouseEvent('mouseup', { bubbles: true }));
+    inner.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+  };
+
   const dismissDialog = async () => {
     await sleep(600);
     const dialogs = document.querySelectorAll('mat-dialog-container');
@@ -218,10 +232,10 @@ async function performMigration(projects) {
             });
 
             if (nbOpt) {
-              nbOpt.click();
+              selectNotebookOption(nbOpt);
               added++;
               log(`Added thread to "${proj.title}": ${tTitle.substring(0, 35)}...`, "success");
-              await sleep(2000); // allow Angular to finish move & auto-close dialog
+              await sleep(2500); // allow Angular to finish move & auto-close dialog
             } else {
               log(`Could not find notebook "${proj.title}" in dialog for: ${tTitle.substring(0, 30)}...`);
               await dismissDialog();
