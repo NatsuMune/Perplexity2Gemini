@@ -460,6 +460,15 @@ async function performInjectedExtraction() {
     await sleep(20);
   }
 
+  // Filter projectsMap threadTitles to only include threads that were successfully extracted
+  const validTitlesSet = new Set(conversations.map(c => c.title));
+  const validProjectsMap = projectsMap.map(proj => ({
+    ...proj,
+    threadTitles: (proj.threadTitles || []).filter(tTitle => validTitlesSet.has(tTitle))
+  })).filter(proj => proj.threadTitles.length > 0 || proj.instructions);
+
+  chrome.runtime.sendMessage({ type: 'P2G_PROJECT_DATA', projects: validProjectsMap });
+
   chrome.runtime.sendMessage({ 
     type: 'P2G_PROGRESS', 
     index: total, 

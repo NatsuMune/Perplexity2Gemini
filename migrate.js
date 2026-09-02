@@ -66,6 +66,23 @@ async function performMigration(projects) {
     return false;
   };
 
+  const dismissDialog = async () => {
+    await sleep(600);
+    const dialogs = document.querySelectorAll('mat-dialog-container');
+    if (dialogs.length > 0) {
+      dialogs.forEach(dialog => {
+        const closeBtn = Array.from(dialog.querySelectorAll('button')).find(b => {
+          const label = (b.getAttribute('aria-label') || b.innerText || '').toLowerCase();
+          return label.includes('close') || b.querySelector('mat-icon[data-mat-icon-name="close"]');
+        });
+        if (closeBtn) {
+          closeBtn.click();
+        }
+      });
+      document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+    }
+  };
+
   const getThreadButton = (title) => {
     const btns = Array.from(document.querySelectorAll('button[aria-label^="More options for"]'));
     return btns.find(b => {
@@ -190,11 +207,8 @@ async function performMigration(projects) {
               log(`Added thread to notebook: ${tTitle.substring(0, 40)}...`, "success");
             } else {
               log(`Could not find notebook "${proj.title}" in dialog for: ${tTitle.substring(0, 30)}...`);
-              // close dialog
-              const closeBtn = Array.from(document.querySelectorAll('mat-dialog-container button')).find(b => (b.innerText || b.getAttribute('aria-label') || '').includes('Close'));
-              if (closeBtn) closeBtn.click();
             }
-            await sleep(1000);
+            await dismissDialog();
           } else {
              // Close menu by clicking body
              document.body.click();
@@ -210,6 +224,7 @@ async function performMigration(projects) {
     await sleep(2000);
   }
 
+  await dismissDialog();
   chrome.runtime.sendMessage({ type: 'MIGRATE_PROGRESS', current: projects.length, total: projects.length });
   log("Migration completed!", "success");
 }
