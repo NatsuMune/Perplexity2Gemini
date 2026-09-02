@@ -97,14 +97,18 @@ async function performMigration(projects) {
     }
   };
 
-  const getThreadButton = (title) => {
-    // If sidebar is collapsed, open it
-    const openSidebarBtn = document.querySelector('button[aria-label="Open sidebar"]');
-    if (openSidebarBtn && openSidebarBtn.offsetWidth > 0 && window.getComputedStyle(openSidebarBtn).display !== 'none') {
-      openSidebarBtn.click();
+  const getThreadButton = async (title) => {
+    let btns = Array.from(document.querySelectorAll('button[aria-label^="More options for"]'));
+    if (btns.length === 0) {
+      // Sidebar might be collapsed - try opening it
+      const openSidebarBtn = document.querySelector('button[aria-label="Open sidebar"]');
+      if (openSidebarBtn && openSidebarBtn.offsetWidth > 0) {
+        openSidebarBtn.click();
+        await sleep(1000);
+        btns = Array.from(document.querySelectorAll('button[aria-label^="More options for"]'));
+      }
     }
 
-    const btns = Array.from(document.querySelectorAll('button[aria-label^="More options for"]'));
     return btns.find(b => {
       const label = (b.getAttribute('aria-label') || '').replace("More options for ", "").trim().toLowerCase();
       const cleanTitle = (title || '').trim().toLowerCase();
@@ -203,50 +207,48 @@ async function performMigration(projects) {
     if (proj.threadTitles && proj.threadTitles.length > 0) {
       log(`Adding ${proj.threadTitles.length} threads to "${proj.title}"...`);
       
-      // Expand sidebar or click Library
-      const openSidebarBtn = document.querySelector('button[aria-label="Open sidebar"]');
-      if (openSidebarBtn && openSidebarBtn.offsetWidth > 0) {
-        openSidebarBtn.click();
-        await sleep(800);
-      }
-
       let added = 0;
       for (const tTitle of proj.threadTitles) {
-        const tBtn = getThreadButton(tTitle);
-        if (tBtn) {
-          tBtn.scrollIntoView({ behavior: 'smooth', block: 'center' });
-          await sleep(300);
-          tBtn.click();
-          await sleep(800);
-          
-          const menuItems = Array.from(document.querySelectorAll('.mat-mdc-menu-item, button'));
-          const addOpt = menuItems.find(el => (el.innerText || '').includes('Add to notebook'));
-          if (addOpt) {
-            addOpt.click();
-            await sleep(1500); // wait for dialog to populate
+        try {
+          const tBtn = await getThreadButton(tTitle);
+          if (tBtn) {
+            tBtn.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            await sleep(500);
+            tBtn.click();
+            await sleep(800);
             
-            const listOptions = Array.from(document.querySelectorAll('mat-list-option, .mat-mdc-list-item, div[role="option"]'));
-            const nbOpt = listOptions.find(o => {
-              const text = (o.innerText || o.textContent || '').trim().toLowerCase();
-              return text.includes(proj.title.toLowerCase());
-            });
+            const menuItems = Array.from(document.querySelectorAll('.mat-mdc-menu-item, button'));
+            const addOpt = menuItems.find(el => (el.innerText || '').includes('Add to notebook'));
+            if (addOpt) {
+              addOpt.click();
+              await sleep(1500); // wait for dialog to populate
+              
+              const listOptions = Array.from(document.querySelectorAll('mat-list-option, .mat-mdc-list-item, div[role="option"]'));
+              const nbOpt = listOptions.find(o => {
+                const text = (o.innerText || o.textContent || '').trim().toLowerCase();
+                return text.includes(proj.title.toLowerCase());
+              });
 
-            if (nbOpt) {
-              selectNotebookOption(nbOpt);
-              added++;
-              log(`Added thread to "${proj.title}": ${tTitle.substring(0, 35)}...`, "success");
-              await sleep(2500); // allow Angular to finish move & auto-close dialog
+              if (nbOpt) {
+                selectNotebookOption(nbOpt);
+                added++;
+                log(`Added thread to "${proj.title}": ${tTitle.substring(0, 35)}...`, "success");
+                await sleep(2500); // allow Angular to finish move & auto-close dialog
+              } else {
+                log(`Could not find notebook "${proj.title}" in dialog for: ${tTitle.substring(0, 30)}...`);
+                await dismissDialog();
+              }
             } else {
-              log(`Could not find notebook "${proj.title}" in dialog for: ${tTitle.substring(0, 30)}...`);
-              await dismissDialog();
+               document.body.click();
+               log(`'Add to notebook' option missing for: ${tTitle.substring(0, 30)}...`);
             }
           } else {
-             document.body.click();
-             log(`'Add to notebook' option missing for: ${tTitle.substring(0, 30)}...`);
+            log(`Skipped (not found in Recents): ${tTitle.substring(0, 35)}...`);
           }
-        } else {
-          log(`Skipped (not found in Recents): ${tTitle.substring(0, 35)}...`);
+        } catch (err) {
+          log(`Error adding thread "${tTitle.substring(0, 30)}...": ${err.message}`, "error");
         }
+        await sleep(500);
       }
       log(`Successfully added ${added}/${proj.threadTitles.length} threads to "${proj.title}".`, "success");
     }
