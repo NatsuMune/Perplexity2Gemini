@@ -2,11 +2,17 @@
 
 A Chrome extension to seamlessly export your Perplexity AI chat history and organize your projects/threads into Google Gemini Notebooks (Gems).
 
+## What Gets Migrated
+
+- **Standalone Threads**: All individual, unorganized Perplexity chats are exported and imported directly into Gemini's chat history (**Recents** sidebar).
+- **Project Threads**: All chat threads belonging to Perplexity Projects are exported and mapped to their respective project groups.
+- **Projects Converted to Notebooks**: Each Perplexity Project is automatically converted over into a dedicated **Google Gemini Notebook**, preserving the project's title, custom system instructions, and moving the project's threads directly into that notebook.
+
 ## Features
 
 - **100% Local & Private Processing**: Extraction runs entirely in your local browser session. No credentials or chat data are sent to external servers.
 - **Perplexity Export**: Extracts all active threads and projects from Perplexity, generating a Google Takeout-compatible ZIP archive.
-- **Gemini Notebook Automation**: Automatically recreates Perplexity Projects as Gemini Notebooks, applies project instructions, and assigns imported threads into their respective notebooks.
+- **Gemini Notebook Automation**: Automatically recreates Perplexity Projects as Gemini Notebooks, applies project instructions, and assigns imported project threads into their respective notebooks.
 - **Resilient DOM Handling**: Handles Angular MDC selection states, modal lifecycles, and asynchronous element hydration smoothly.
 
 ## How to Use
