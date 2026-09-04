@@ -57,31 +57,41 @@ document.addEventListener('DOMContentLoaded', async () => {
 });
 
 async function performMigration(projects) {
-  const log = (msg, level='normal') => chrome.runtime.sendMessage({ type: 'MIGRATE_LOG', message: msg, level });
+  const log = (msg, level='normal') => {
+    chrome.runtime.sendMessage({ type: 'MIGRATE_LOG', message: msg, level });
+    updateToast(msg);
+  };
   const sleep = ms => new Promise(r => setTimeout(r, ms));
   
+  const waitFor = async (selectorOrFn, timeout = 8000, interval = 200) => {
+    const start = Date.now();
+    while (Date.now() - start < timeout) {
+      const res = typeof selectorOrFn === 'function' ? selectorOrFn() : document.querySelector(selectorOrFn);
+      if (res) return res;
+      await sleep(interval);
+    }
+    return null;
+  };
+
+  const updateToast = (text) => {
+    let toast = document.getElementById('p2g-status-toast');
+    if (!toast) {
+      toast = document.createElement('div');
+      toast.id = 'p2g-status-toast';
+      toast.style.cssText = 'position:fixed;top:16px;right:16px;z-index:999999;background:#1e1e1e;color:#fff;padding:12px 18px;border-radius:8px;font-family:system-ui,-apple-system,sans-serif;font-size:13px;box-shadow:0 4px 16px rgba(0,0,0,0.3);border:1px solid #444;max-width:350px;pointer-events:none;transition:all 0.3s ease;';
+      document.body.appendChild(toast);
+    }
+    toast.textContent = text;
+  };
+
   const clickEl = (selector) => {
     const el = document.querySelector(selector);
     if (el) { el.click(); return true; }
     return false;
   };
 
-  const selectNotebookOption = (nbOpt) => {
-    if (!nbOpt) return;
-    nbOpt.focus();
-    nbOpt.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', code: 'Enter', keyCode: 13, bubbles: true }));
-    nbOpt.dispatchEvent(new KeyboardEvent('keyup', { key: 'Enter', code: 'Enter', keyCode: 13, bubbles: true }));
-
-    const inner = nbOpt.querySelector('.option-content') || nbOpt.querySelector('.mdc-list-item__content') || nbOpt;
-    inner.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true }));
-    inner.dispatchEvent(new MouseEvent('mousedown', { bubbles: true }));
-    inner.dispatchEvent(new PointerEvent('pointerup', { bubbles: true }));
-    inner.dispatchEvent(new MouseEvent('mouseup', { bubbles: true }));
-    inner.dispatchEvent(new MouseEvent('click', { bubbles: true }));
-  };
-
   const dismissDialog = async () => {
-    await sleep(600);
+    await sleep(400);
     const dialogs = document.querySelectorAll('mat-dialog-container');
     if (dialogs.length > 0) {
       dialogs.forEach(dialog => {
@@ -100,7 +110,6 @@ async function performMigration(projects) {
   const getThreadButton = async (title) => {
     let btns = Array.from(document.querySelectorAll('button[aria-label^="More options for"]'));
     if (btns.length === 0) {
-      // Sidebar might be collapsed - try opening it
       const openSidebarBtn = document.querySelector('button[aria-label="Open sidebar"]');
       if (openSidebarBtn && openSidebarBtn.offsetWidth > 0) {
         openSidebarBtn.click();
@@ -124,86 +133,80 @@ async function performMigration(projects) {
     log(`[Project ${i+1}/${projects.length}] Migrating: ${proj.title}`);
     chrome.runtime.sendMessage({ type: 'MIGRATE_PROGRESS', current: i, total: projects.length });
 
-    // 1. Go to Library if not there
-    if (!clickEl('a[aria-label="Library"]')) {
-      log("Could not find Library button, assuming already in Library or layout changed.");
-    }
-    await sleep(2000);
+    // Check if notebook already exists
+    const existingNb = Array.from(document.querySelectorAll('a, button')).find(el => {
+      const label = (el.getAttribute('aria-label') || el.innerText || '').trim().toLowerCase();
+      return label === proj.title.toLowerCase();
+    });
 
-    // 2. Click New Notebook
-    if (!clickEl('a[aria-label="New notebook"]')) {
-      log("Could not find New notebook button! Ensure Library is open.", "error");
-      continue;
-    }
-    log("Opened notebook creator...");
-    await sleep(3000); // wait for notebook to load
-
-    // 3. Fill Title & Submit
-    const titleInput = document.querySelector('input[aria-label="Name of the notebook"]') || document.querySelector('#project-name-input');
-    if (titleInput) {
-      titleInput.value = proj.title;
-      titleInput.dispatchEvent(new Event('input', { bubbles: true }));
-      titleInput.dispatchEvent(new Event('change', { bubbles: true }));
-      await sleep(500);
-
-      // Click the visible Create Notebook button
-      const btns = Array.from(document.querySelectorAll('button'));
-      const createBtn = btns.find(b => {
-        const isCreate = b.getAttribute('aria-label') === 'Create notebook' || b.innerText.trim() === 'Create notebook';
-        const isVis = b.offsetWidth > 0 && b.offsetHeight > 0 && window.getComputedStyle(b).display !== 'none';
-        return isCreate && isVis;
-      });
-
-      if (createBtn) {
-        createBtn.click();
-        log(`Created notebook: ${proj.title}`);
-      } else {
-        const form = titleInput.closest('form');
-        if (form && form.requestSubmit) form.requestSubmit();
-        log(`Submitted notebook form for: ${proj.title}`);
-      }
+    if (existingNb) {
+      log(`Notebook "${proj.title}" already exists, proceeding to threads.`);
     } else {
-      log("Could not find notebook title input.", "error");
-    }
-    await sleep(4000); // wait for save and redirect to notebook view
+      // 1. Click New Notebook
+      const newNbBtn = await waitFor('a[aria-label="New notebook"], button[aria-label="New notebook"]', 3000);
+      if (newNbBtn) {
+        newNbBtn.click();
+      } else {
+        clickEl('a[aria-label="Library"]');
+        await sleep(1500);
+        const retryNewNb = await waitFor('a[aria-label="New notebook"], button[aria-label="New notebook"]', 3000);
+        if (retryNewNb) retryNewNb.click();
+      }
+      log("Opened notebook creator...");
 
-    // 4. Instructions
+      // 2. Fill Title & Submit
+      const titleInput = await waitFor('#project-name-input, input[aria-label="Name of the notebook"]', 6000);
+      if (titleInput) {
+        const nativeSetter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value').set;
+        nativeSetter.call(titleInput, proj.title);
+        titleInput.dispatchEvent(new Event('input', { bubbles: true }));
+        titleInput.dispatchEvent(new Event('change', { bubbles: true }));
+        await sleep(600);
+
+        const createBtn = await waitFor('button[aria-label="Create notebook"]', 4000);
+        if (createBtn) {
+          createBtn.click();
+          log(`Created notebook: ${proj.title}`, "success");
+        } else {
+          const form = titleInput.closest('form');
+          if (form && form.requestSubmit) form.requestSubmit();
+          log(`Submitted notebook form for: ${proj.title}`);
+        }
+      } else {
+        log("Could not find notebook title input.", "error");
+      }
+      await sleep(3500); // wait for redirect to notebook view
+    }
+
+    // 3. Instructions
     if (proj.instructions) {
       log("Adding notebook instructions...");
-      // Click open notebook actions menu
-      const menuBtns = Array.from(document.querySelectorAll('button[aria-label="Open notebook actions menu"]'));
-      if (menuBtns.length > 0) {
-        menuBtns[0].click();
-        await sleep(1000);
+      const menuBtn = await waitFor('button[aria-label="Open notebook actions menu"]', 3000);
+      if (menuBtn) {
+        menuBtn.click();
+        await sleep(800);
         
-        // Click Notebook settings
         const settingsOpt = Array.from(document.querySelectorAll('.mat-mdc-menu-item')).find(el => el.innerText.includes('Notebook settings'));
         if (settingsOpt) {
           settingsOpt.click();
           await sleep(1000);
           
-          // Fill textarea
-          const ta = document.querySelector('mat-dialog-container textarea');
+          const ta = await waitFor('mat-dialog-container textarea', 4000);
           if (ta) {
             ta.value = proj.instructions;
             ta.dispatchEvent(new Event('input', { bubbles: true }));
             await sleep(500);
             
-            // Click Save
             const saveBtn = Array.from(document.querySelectorAll('mat-dialog-container button')).find(b => b.innerText.match(/Save/i));
             if (saveBtn) saveBtn.click();
             await sleep(1000);
             log("Saved instructions.", "success");
-          } else {
-            log("Could not find instructions textarea in settings dialog.");
           }
-        } else {
-          log("Could not find 'Notebook settings' in menu.");
         }
       }
     }
 
-    // 5. Add Threads
+    // 4. Add Threads
     if (proj.threadTitles && proj.threadTitles.length > 0) {
       log(`Adding ${proj.threadTitles.length} threads to "${proj.title}"...`);
       
@@ -217,46 +220,57 @@ async function performMigration(projects) {
             tBtn.click();
             await sleep(800);
             
-            const menuItems = Array.from(document.querySelectorAll('.mat-mdc-menu-item, button'));
+            const menuItems = Array.from(document.querySelectorAll('.mat-mdc-menu-item, [role="menuitem"], button'));
             const addOpt = menuItems.find(el => (el.innerText || '').includes('Add to notebook'));
             if (addOpt) {
               addOpt.click();
-              await sleep(1500); // wait for dialog to populate
               
-              const listOptions = Array.from(document.querySelectorAll('mat-list-option, .mat-mdc-list-item, div[role="option"]'));
-              const nbOpt = listOptions.find(o => {
-                const text = (o.innerText || o.textContent || '').trim().toLowerCase();
-                return text.includes(proj.title.toLowerCase());
-              });
+              const dialog = await waitFor('mat-dialog-container', 4000);
+              if (dialog) {
+                await sleep(500);
+                const listOptions = Array.from(dialog.querySelectorAll('mat-list-option, .mat-mdc-list-item, div[role="option"]'));
+                const nbOpt = listOptions.find(o => {
+                  const text = (o.innerText || o.textContent || '').trim().toLowerCase();
+                  return text.includes(proj.title.toLowerCase());
+                });
 
-              if (nbOpt) {
-                selectNotebookOption(nbOpt);
-                added++;
-                log(`Added thread to "${proj.title}": ${tTitle.substring(0, 35)}...`, "success");
-                await sleep(2500); // allow Angular to finish move & auto-close dialog
-              } else {
-                log(`Could not find notebook "${proj.title}" in dialog for: ${tTitle.substring(0, 30)}...`);
-                await dismissDialog();
+                if (nbOpt) {
+                  nbOpt.click();
+                  added++;
+                  log(`Added thread to "${proj.title}": ${tTitle.substring(0, 35)}...`, "success");
+                  
+                  // Wait for dialog to auto-close
+                  await waitFor(() => !document.querySelector('mat-dialog-container'), 3000);
+                } else {
+                  log(`Could not find notebook "${proj.title}" in dialog for: ${tTitle.substring(0, 30)}...`);
+                  await dismissDialog();
+                }
               }
             } else {
-               document.body.click();
-               log(`'Add to notebook' option missing for: ${tTitle.substring(0, 30)}...`);
+              document.body.click();
+              log(`'Add to notebook' option missing for: ${tTitle.substring(0, 30)}...`);
             }
           } else {
-            log(`Skipped (not found in Recents): ${tTitle.substring(0, 35)}...`);
+            log(`Skipped (already moved or not in Recents): ${tTitle.substring(0, 35)}...`);
           }
         } catch (err) {
           log(`Error adding thread "${tTitle.substring(0, 30)}...": ${err.message}`, "error");
+          await dismissDialog();
         }
-        await sleep(500);
+        await sleep(600);
       }
-      log(`Successfully added ${added}/${proj.threadTitles.length} threads to "${proj.title}".`, "success");
+      log(`Successfully processed threads for "${proj.title}".`, "success");
     }
 
-    await sleep(2000);
+    await sleep(1500);
   }
 
   await dismissDialog();
   chrome.runtime.sendMessage({ type: 'MIGRATE_PROGRESS', current: projects.length, total: projects.length });
   log("Migration completed!", "success");
+  
+  setTimeout(() => {
+    const toast = document.getElementById('p2g-status-toast');
+    if (toast) toast.remove();
+  }, 6000);
 }

@@ -9,14 +9,28 @@ document.addEventListener('DOMContentLoaded', async () => {
 
   let [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
   
-  if (!tab || !tab.url) {
+  const tabUrl = (tab && tab.url) ? tab.url : '';
+  if (!tabUrl.includes("perplexity.ai") && !tabUrl.includes("gemini.google.com")) {
+    const geminiTabs = await chrome.tabs.query({ url: "*://gemini.google.com/*" });
+    if (geminiTabs && geminiTabs.length > 0) {
+      tab = geminiTabs[0];
+    } else {
+      const perplexityTabs = await chrome.tabs.query({ url: "*://*.perplexity.ai/*" });
+      if (perplexityTabs && perplexityTabs.length > 0) {
+        tab = perplexityTabs[0];
+      }
+    }
+  }
+
+  const effectiveUrl = (tab && tab.url) ? tab.url : '';
+  if (!effectiveUrl) {
     viewIdle.classList.remove('hidden');
     return;
   }
 
-  if (tab.url.includes("perplexity.ai")) {
+  if (effectiveUrl.includes("perplexity.ai")) {
     viewExtract.classList.remove('hidden');
-  } else if (tab.url.includes("gemini.google.com")) {
+  } else if (effectiveUrl.includes("gemini.google.com")) {
     viewMigrate.classList.remove('hidden');
     
     const projectListContainer = document.getElementById('projectListContainer');
